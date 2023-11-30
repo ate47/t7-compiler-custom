@@ -101,7 +101,7 @@ namespace DebugCompiler
 
             if (args.Length > 2 && options.Contains("--inject"))
             {
-                return root.cmd_Inject(args, options);
+                return root.cmd_Inject(arguments, options);
             }
 
             root.AddCommand(ConsoleKey.Q, "Quit Program", root.cmd_Exit);
@@ -305,7 +305,7 @@ namespace DebugCompiler
 
             if(!File.Exists(args[0]))
             {
-                return Error("Invalid arguments. Specified file does not exist.");
+                return Error($"Invalid arguments. Specified file does not exist. ({args[0]})");
             }
             var cfg = new CompilerConfig();
 
@@ -330,14 +330,41 @@ namespace DebugCompiler
             {
                 return Error("Failed to read the file specified");
             }
-            var path = args.Length > 2 ? args[2] : (cfg.Game == Games.T7 ? @"scripts/shared/duplicaterender_mgr.gsc" : @"scripts/zm_common/load.gsc");
+            var path = args.Length > 2 && !args[2].Equals(".") ? args[2] : (cfg.Game == Games.T7 ? @"scripts/shared/duplicaterender_mgr.gsc" : @"scripts/zm_common/load.gsc");
             PointerEx injresult = InjectScript(path, buffer, cfg, false);
             Console.WriteLine();
             Console.ForegroundColor = !injresult ? ConsoleColor.Green : ConsoleColor.Red;
             Console.WriteLine($"\t[{path}]: {(!injresult ? "Injected" : $"Failed to Inject ({injresult:X})")}\n");
 
+
             if (!injresult)
             {
+                if (args.Length > 3 && cfg.Game == Games.T8)
+                {
+                    try
+                    {
+                        // csc
+                        var pathCsc = args.Length > 4 ? args[4] : @"scripts/zm_common/load.csc";
+                        byte[] bufferCsc = File.ReadAllBytes(args[3]);
+
+
+                        PointerEx injresultCsc = InjectScript(pathCsc, bufferCsc, cfg, true);
+                        Console.WriteLine();
+                        Console.ForegroundColor = !injresult ? ConsoleColor.Green : ConsoleColor.Red;
+                        Console.WriteLine($"\t[{path}]: {(!injresult ? "Injected CSC" : $"Failed to Inject CSC ({injresultCsc:X})")}\n");
+                        if (injresultCsc)
+                        {
+                            NoExcept(FreeActiveScript);
+                            return 0;
+                        }
+                    }
+                    catch
+                    {
+                        NoExcept(FreeActiveScript);
+                        return Error($"Can't inject CSC {args[3]}");
+                    }
+                }
+
                 Console.ForegroundColor = ConsoleColor.Cyan;
                 Console.WriteLine("Press any key to reset gsc parsetree... If in game, you are probably going to crash.\n");
                 Console.ForegroundColor = ConsoleColor.Yellow;
