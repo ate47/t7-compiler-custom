@@ -309,6 +309,17 @@ namespace DebugCompiler
             }
             var cfg = new CompilerConfig();
 
+            foreach (string opt in opts)
+            {
+                if (opt.Length > 2 && opt[1] == 'D')
+                { // -Dsomething
+                    cfg.ConditionalSymbols.Add(opt.Substring(2));
+                } else if (opt.Length > 2 && opt[1] == 'C')
+                { // -Coption=value
+                    cfg.ReadConfig(opt.Substring(2));
+                }
+            }
+
             if (args.Length > 1)
             {
                 if (!Enum.TryParse(args[1], true, out Games game))
