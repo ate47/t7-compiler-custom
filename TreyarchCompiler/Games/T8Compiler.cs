@@ -126,7 +126,7 @@ namespace TreyarchCompiler.Games
                     case "functionframe":
                         FunctionFrame = directive.ChildNodes[0];
                         if (FunctionFrame.ChildNodes[0].Term.Name == "autoexec") flags |= GetAutoExecByVM();
-                        if (FunctionFrame.ChildNodes[0].Term.Name == "event")
+                        if (FunctionFrame.ChildNodes[0].Term.Name == "event_handler")
                         {
                             flags |= GetEventByVM();
                             callbackName = FunctionFrame.ChildNodes[2].Token.ValueString.ToLower();
