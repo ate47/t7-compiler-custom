@@ -23,6 +23,8 @@ namespace T89CompilerLib.ScriptComponents
                 {
                     case VM_36:
                         return 0x60;
+                    case VM_38:
+                        return 0x58;
                 }
                 return 0x80;
             }
@@ -52,12 +54,13 @@ namespace T89CompilerLib.ScriptComponents
         public uint UNK_40 { get; internal set; } //0x40, 0x44
         public uint GlobalObjectTable { get; internal set; } //0x44, 0x48
         public uint UNK_48 { get; internal set; } //0x48, 0x4C
-        public uint UNK_4C { get; internal set; } //0x4C, 0x50
+        public uint RequiresImplementsTable { get; internal set; } //0x4C, 0x50
 
         public uint UNK_50 { get; internal set; } //0x50, 0x54
         public uint UNK_54 { get; internal set; } //0x54, 0x58
         public ushort IncludeCount { get; internal set; } //0x58, 0x5A
-        public ushort UNK_5A { get; internal set; } //0x5A, 0x5C
+        public byte UNK_5A { get; internal set; } //0x5A, 0x5B
+        public byte RequiresImplementsCount { get; internal set; } //0x5B, 0x5C
         public uint UNK_5C { get; internal set; } //0x5C, 0x60
 
         private void Deserialize(ref byte[] data, ulong ExpectedMagic)
@@ -98,12 +101,13 @@ namespace T89CompilerLib.ScriptComponents
             GlobalObjectTable = reader.ReadUInt32(); // 0x44 / 0x40
             UNK_48 = reader.ReadUInt32();
 
-            if (Script.VM == VM_36) UNK_4C = reader.ReadUInt32();
+            if (Script.VM == VM_36) RequiresImplementsTable = reader.ReadUInt32();
 
             UNK_50 = reader.ReadUInt32();
             UNK_54 = reader.ReadUInt32();
             IncludeCount = reader.ReadUInt16();
-            UNK_5A = reader.ReadUInt16();
+            UNK_5A = reader.ReadByte();
+            RequiresImplementsCount = reader.ReadByte();
             UNK_5C = reader.ReadUInt32();
 
             reader.Dispose();
@@ -118,8 +122,6 @@ namespace T89CompilerLib.ScriptComponents
 
         public int LowestSectionPtrAfter(int offset)
         {
-            int Lowest = 0x7FFFFFFF;
-
             List<int> Sections = new int[]
             {
                 (int)IncludeTableOffset,
@@ -127,6 +129,7 @@ namespace T89CompilerLib.ScriptComponents
                 (int)ExportTableOffset,
                 (int)ImportTableOffset,
                 (int)GlobalObjectTable,
+                (int)RequiresImplementsTable,
             }.ToList();
 
             return Sections.Where(x => x > offset).OrderByDescending(x => x).Last();
@@ -147,37 +150,76 @@ namespace T89CompilerLib.ScriptComponents
         {
             BinaryWriter writer = new BinaryWriter(new MemoryStream(raw));
 
-            writer.Write(ScriptMagic);           //0x0
-            writer.Write(SourceChecksum);
-            writer.Write(UNK_0C);
+            if (Script.VM == VM_36)
+            {
+                writer.Write(ScriptMagic);           //0x0
+                writer.Write(SourceChecksum);
+                writer.Write(UNK_0C);
 
-            writer.Write(ScriptName);           //0x10
-            writer.Write(IncludeTableOffset);
-            writer.Write(StringCount);
-            writer.Write(ExportsCount);
+                writer.Write(ScriptName);           //0x10
+                writer.Write(IncludeTableOffset);
+                writer.Write(StringCount);
+                writer.Write(ExportsCount);
 
-            writer.Write(UNK_20);               //0x20
-            writer.Write(StringTableOffset);
-            writer.Write(ImportsCount);
-            writer.Write((ushort)0); //numfixups, unsupported
-            writer.Write(UNK_2C);
+                writer.Write(UNK_20);               //0x20
+                writer.Write(StringTableOffset);
+                writer.Write(ImportsCount);
+                writer.Write((ushort)0); //numfixups, unsupported
+                writer.Write(UNK_2C);
 
-            writer.Write(ExportTableOffset); //0x30
-            if (Script.VM == VM_36) writer.Write(UNK_34);
-            writer.Write(ImportTableOffset);
-            writer.Write((ushort)GlobalObjectCount);
-            writer.Write(UNK_3E);
+                writer.Write(ExportTableOffset); //0x30
+                if (Script.VM == VM_36) writer.Write(UNK_34);
+                writer.Write(ImportTableOffset);
+                writer.Write((ushort)GlobalObjectCount);
+                writer.Write(UNK_3E);
 
-            writer.Write(raw.Length); //0x40
-            writer.Write(GlobalObjectTable); //unsupported
-            writer.Write(raw.Length); //unsupported
-            if (Script.VM == VM_36) writer.Write(raw.Length); //unsupported
+                writer.Write(raw.Length); //0x40
+                writer.Write(GlobalObjectTable); //unsupported
+                writer.Write(raw.Length); //unsupported
+                if (Script.VM == VM_36) writer.Write(RequiresImplementsTable);
 
-            writer.Write(raw.Length); //0x50
-            writer.Write(raw.Length); //unsupported
-            writer.Write(IncludeCount);
-            writer.Write((ushort)0);
-            writer.Write((int)0);
+                writer.Write(raw.Length); //0x50
+                writer.Write(raw.Length); //unsupported
+                writer.Write(IncludeCount);
+                writer.Write((byte)0);
+                writer.Write(RequiresImplementsCount);
+                writer.Write((int)0);
+            } else if (Script.VM == VM_38)
+            {
+                writer.Write(ScriptMagic); //0x0
+                writer.Write(SourceChecksum);
+                writer.Write(UNK_0C);
+
+                writer.Write(ScriptName); //0x10
+                writer.Write(StringCount);
+                writer.Write(ExportsCount);
+                writer.Write(ImportsCount);
+                writer.Write((ushort)0);
+
+                writer.Write(GlobalObjectCount); // 0x20
+                writer.Write((ushort)0); //unsupported
+                writer.Write(IncludeCount);
+                writer.Write((ushort)0); //unsupported
+                writer.Write(raw.Length); //unsupported
+                writer.Write(0); //cseg_offset
+
+                writer.Write(StringTableOffset); // 0x30
+                writer.Write(IncludeTableOffset);
+                writer.Write(ExportTableOffset);
+                writer.Write(ImportTableOffset);
+
+                writer.Write(raw.Length); // 0x40 //unsupported
+                writer.Write(GlobalObjectTable);
+                writer.Write(raw.Length); //size?
+                writer.Write((ushort)0);
+                writer.Write((ushort)0);
+
+                writer.Write(raw.Length); // 0x50 //cseg_size
+                writer.Write((uint)0);
+            } else
+            {
+                throw new Exception($"Invalid VM VM_{Script.VM:x}");
+            }
 
             writer.Dispose();
         }
@@ -201,6 +243,9 @@ namespace T89CompilerLib.ScriptComponents
             {
                 case VM_36:
                     header.SourceChecksum = BitConverter.ToUInt32(new byte[] { 0x38, 0x9D, 0x6E, 0x63 }, 0);
+                    break;
+                case VM_38:
+                    header.SourceChecksum = BitConverter.ToUInt32(new byte[] { 0xa2, 0x16, 0x79, 0xC9 }, 0);
                     break;
             }
             return header;

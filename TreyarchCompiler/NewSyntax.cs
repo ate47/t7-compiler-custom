@@ -156,6 +156,7 @@ namespace TreyarchCompiler
         protected virtual NonTerminal FunctionFrame => new NonTerminal("functionFrame", ToTerm("autoexec", "autoexec") + functions | (ToTerm("event_handler", "event_handler") + "[" + Identifier + "]" + functions) | functions);
         protected virtual NonTerminal Overrides => new NonTerminal("overrides", Unsupported);
         protected virtual NonTerminal NameSpaceDirective => new NonTerminal("namespace", "#namespace" + Identifier + ";");
+        protected virtual NonTerminal RequiresImplementsDirective => new NonTerminal("requiresimplements", "#requiresimplements" + StringLiteral + ";");
         protected virtual NonTerminal verbatimString => new NonTerminal("Unsupported", Unsupported);
         protected virtual NonTerminal hashedString => new NonTerminal("hashedString", ToTerm("#") + StringLiteral);
         protected virtual NonTerminal hashedVariable => new NonTerminal("hashedVariable", ToTerm("#") + Identifier);
@@ -212,7 +213,7 @@ namespace TreyarchCompiler
             #region Directives
             //Master Directive Rules
             directives.Rule = MakeStarRule(directives, null, directive);
-            directive.Rule = Empty | Overrides | includes | globals | FunctionFrame | NameSpaceDirective | usingTree | functionDetour;
+            directive.Rule = Empty | Overrides | includes | globals | FunctionFrame | NameSpaceDirective | RequiresImplementsDirective | usingTree | functionDetour;
 
             //Includes
             includes.Rule = ToTerm("#include") + IncludeIdentifier + includeExtension.Q() + ";" | 
@@ -292,9 +293,10 @@ namespace TreyarchCompiler
             call.Rule = callPrefix + callFrame | callFrame;
 
             //Call Components
-            callPrefix.Rule = variableExpr + ToTerm("thread") | variableExpr | ToTerm("thread");
+            callPrefix.Rule = variableExpr + ToTerm("thread") | variableExpr + ToTerm("childthread") | variableExpr | ToTerm("thread") | ToTerm("childthread");
             callFrame.Rule = baseCall | baseCallPointer;
             classCall.Rule = ToTerm("thread") + ToTerm("[" + "[") + variableExpr + "]]->" + Identifier + parenCallParameters |
+                             ToTerm("childthread") + ToTerm("[" + "[") + variableExpr + "]]->" + Identifier + parenCallParameters |
                              ToTerm("[" + "[") + variableExpr + "]]->" + Identifier + parenCallParameters;
 
             //Script Reference Components

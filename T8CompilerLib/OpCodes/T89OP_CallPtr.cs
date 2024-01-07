@@ -9,11 +9,11 @@
 
             if(context.HasContext(ScriptContext.HasCaller))
             {
-                Code = context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptMethodThreadCallPointer : ScriptOpCode.ScriptMethodCallPointer;
+                Code = context.HasContext(ScriptContext.ChildThreaded) ? ScriptOpCode.ScriptMethodChildThreadCallPointer : context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptMethodThreadCallPointer : ScriptOpCode.ScriptMethodCallPointer;
             }
             else
             {
-                Code = context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptThreadCallPointer : ScriptOpCode.ScriptFunctionCallPointer;
+                Code = context.HasContext(ScriptContext.ChildThreaded) ? ScriptOpCode.ScriptChildThreadCallPointer : context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptThreadCallPointer : ScriptOpCode.ScriptFunctionCallPointer;
             }
         }
 

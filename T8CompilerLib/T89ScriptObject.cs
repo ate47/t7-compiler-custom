@@ -14,7 +14,14 @@ namespace T89CompilerLib
 {
     public enum VMREVISIONS
     { 
-        VM_36 = 0x36
+        VM_36 = 0x36,
+        VM_38 = 0x38
+    }
+    public enum PLATFORM
+    {
+        PC = 0,
+        PS4 = 1,
+        XBOX = 2
     }
     /// <summary>
     /// T89 Script object
@@ -23,6 +30,7 @@ namespace T89CompilerLib
     {
         public bool UseMasking = false;
         public VMREVISIONS VM { get; private set; }
+        public PLATFORM PLATFORM { get; private set; }
         private static string[] HashIdentifierPrefixes = new string[]
         {
             "func_",
@@ -46,17 +54,19 @@ namespace T89CompilerLib
             return local;
         }
 
-        public T89ScriptObject(VMREVISIONS revision) : this(null, revision) { }
+        public T89ScriptObject(VMREVISIONS revision, PLATFORM platform) : this(null, revision, platform) { }
 
-        public T89ScriptObject(T89ScriptMetadata NewMetadata, VMREVISIONS revision)
+        public T89ScriptObject(T89ScriptMetadata NewMetadata, VMREVISIONS revision, PLATFORM platform)
         {
             VM = revision;
+            PLATFORM = platform;
             __header__ = T89ScriptHeader.New(this);
             __exports__ = T89ExportsSection.New(this);
             __imports__ = T89ImportSection.New(this);
             __strings__ = T89StringTableSection.New(this);
             __includes__ = T89IncludesSection.New(this);
             __globals__ = T89GlobalObjectsSection.New(this);
+            __requiresimplements__ = T89RequiresImplementsSection.New(this);
             if (NewMetadata != null)
                 ScriptMetadata = NewMetadata;
 
@@ -87,6 +97,12 @@ namespace T89CompilerLib
         /// </summary>
         public T89IncludesSection Includes => __includes__;
         private T89IncludesSection __includes__;
+
+        /// <summary>
+        /// Script includes
+        /// </summary>
+        public T89RequiresImplementsSection RequiresImplements => __requiresimplements__;
+        private T89RequiresImplementsSection __requiresimplements__;
 
         /// <summary>
         /// Normal String Table
@@ -133,6 +149,7 @@ namespace T89CompilerLib
             T89StringTableSection.ReadStrings(ref data, Header.StringTableOffset, Header.StringCount, ref __strings__, this);
             T89IncludesSection.ReadIncludes(ref data, Header.IncludeTableOffset, Header.IncludeCount, ref __includes__, this);
             T89ExportsSection.ReadExports(ref data, Header.ExportTableOffset, Header.ExportsCount, this, ref __exports__);
+            T89RequiresImplementsSection.ReadImplements(ref data, Header.RequiresImplementsTable, Header.RequiresImplementsCount, ref __requiresimplements__, this);
             throw new NotImplementedException("Didnt implement deserialization of __globals__");
             Link();
         }
@@ -144,7 +161,8 @@ namespace T89CompilerLib
             Imports.Link(Exports, Strings);
             Strings.Link(Imports, Includes);
             Includes.Link(Strings, Globals);
-            Globals.Link(Includes, null);
+            Globals.Link(Includes, RequiresImplements);
+            RequiresImplements.Link(Globals, null);
         }
 
         /// <summary>
@@ -353,8 +371,8 @@ namespace T89CompilerLib
     public class T89ScriptMetadata
     {
         private const string T89PCMetaPath = "vm_codes.db2";
-        private static Dictionary<byte, byte[]> __OperationData;
-        private static Dictionary<byte, byte[]> OperationData
+        private static Dictionary<int, byte[]> __OperationData;
+        private static Dictionary<int, byte[]> OperationData
         {
             get
             {
@@ -362,13 +380,13 @@ namespace T89CompilerLib
                 {
                     try
                     {
-                        __OperationData = new Dictionary<byte, byte[]>();
+                        __OperationData = new Dictionary<int, byte[]>();
                         byte[] tbuff = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location), T89PCMetaPath));
 
                         int i = 0;
                         while(i < tbuff.Length)
                         {
-                            byte _vm = tbuff[i];
+                            int _vm = tbuff[i] | (tbuff[i + 1] << 8);
                             ushort count = BitConverter.ToUInt16(tbuff, i + 2);
                             __OperationData[_vm] = tbuff.Skip(i + 4).Take(count).ToArray();
                             i += 4 + count;
@@ -386,7 +404,7 @@ namespace T89CompilerLib
         /// <summary>
         /// This reverse map allows us to quickly query the defined value of a script opcode while also allowing duplicate entries for the same opcode, while also preventing two opcodes from sharing the same short value
         /// </summary>
-        private readonly Dictionary<byte, Dictionary<ScriptOpCode, ushort>> ReverseOps = new Dictionary<byte, Dictionary<ScriptOpCode, ushort>>();
+        private readonly Dictionary<int, Dictionary<ScriptOpCode, ushort>> ReverseOps = new Dictionary<int, Dictionary<ScriptOpCode, ushort>>();
         private T89ScriptObject Script { get; set; }
         public T89ScriptMetadata(T89ScriptObject script) : this() { Script = script; }
 
@@ -403,7 +421,7 @@ namespace T89CompilerLib
 
         private void GenerateReverseOps()
         {
-            foreach(byte key in OperationData.Keys)
+            foreach(int key in OperationData.Keys)
             {
                 ReverseOps[key] = new Dictionary<ScriptOpCode, ushort>();
                 for(int i = 0; i < OperationData[key].Length; i++)
@@ -427,10 +445,14 @@ namespace T89CompilerLib
 
                 if (indexer == ScriptOpCode.LazyGetFunction)
                 {
-                    return 0x16; // hardcoded ig
+                    // hardcoded ig
+                    if (Script.VM == VMREVISIONS.VM_36)
+                    {
+                        return 0x16;
+                    }
                 }
 
-                Console.WriteLine($"Platform is missing opcode: {indexer.ToString()}");
+                Console.WriteLine($"Platform is missing opcode: {indexer}");
                 return 0xFFFF; //invalid
             }
         }
@@ -450,9 +472,9 @@ namespace T89CompilerLib
             }
         }
 
-        private byte GetVMType()
+        private int GetVMType()
         {
-            return (byte)Script.VM;
+            return (int)Script.VM | ((int)Script.PLATFORM << 8);
         }
 
         public bool ContainsKey(ushort key)
@@ -470,6 +492,7 @@ namespace T89CompilerLib
         HasCaller = 8,
         DecTop = 16,
         IsPointer = 32,
+        ChildThreaded = 64,
 
     }
     [Flags]
@@ -481,5 +504,15 @@ namespace T89CompilerLib
         Private = 0x4,
         VirtualParams = 0x20,
         Event = 0x40
+    }
+    [Flags]
+    public enum ScriptExportFlagsT9
+    {
+        None = 0x0,
+        AutoExec = 0x1,
+        RTLoaded = 0x2,
+        Private = 0x4,
+        Event = 0x20,
+        VirtualParams = 0x40
     }
 }

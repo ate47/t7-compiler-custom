@@ -32,11 +32,11 @@ namespace TreyarchCompiler.Games
         private T89ScriptObject Script;
         private uint ScriptNamespace = 0x30FCC2BF;
 
-        public T89Compiler(Enums.Games game, string code)
+        public T89Compiler(Enums.Games game, Platforms plt, string code)
         {
             Game = game;
             _tree = NewSyntax.ThreadSafeInstance.SyntaxParser.Parse(code);
-            Script = new T89ScriptObject(VM_36);
+            Script = new T89ScriptObject(game == Enums.Games.T9 ? VM_38 : VM_36, plt == Platforms.PS4 ? PLATFORM.PC : plt == Platforms.Xbox ? PLATFORM.XBOX : PLATFORM.PC);
             Script.Header.ScriptName = Script.T8s64Hash("scripts/core_common/clientids_shared.gsc");
             FunctionMetadata = new Dictionary<string, ScriptFunctionMetaData>();
         }
@@ -75,16 +75,28 @@ namespace TreyarchCompiler.Games
 
         private byte GetAutoExecByVM()
         {
+            if (Script.VM == VM_38)
+            {
+                return (byte)ScriptExportFlagsT9.AutoExec;
+            }
             return (byte)ExportFlags.AutoExec;
         }
 
         private byte GetEventByVM()
         {
+            if (Script.VM == VM_38)
+            {
+                return (byte)ScriptExportFlagsT9.Event;
+            }
             return (byte)ExportFlags.Event;
         }
 
         private byte GetPrivateByVM()
         {
+            if (Script.VM == VM_38)
+            {
+                return (byte)ScriptExportFlagsT9.Private;
+            }
             return (byte)ExportFlags.Private;
         }
 
@@ -102,6 +114,14 @@ namespace TreyarchCompiler.Games
                 string callbackName = null;
                 switch (directive.ChildNodes[0].Term.Name.ToLower())
                 {
+                    case "requiresimplements":
+                        if (Script.VM != VM_36)
+                        {
+                            throw new Exception($"requiresimplements not implemented for this VM! [line={_tree.ParserMessages[0].Location.Line}]");
+                        }
+                        var hashVal = Script.T8s64Hash(directive.ChildNodes[0].ChildNodes[1].Token.ValueString);
+                        Script.RequiresImplements.Add(hashVal);
+                        break;
                     case "includes":
                         var node = directive.ChildNodes[0];
                         var str = node.ChildNodes[0].Token.ValueString.ToLower().Replace("\\", "/");
@@ -194,6 +214,12 @@ namespace TreyarchCompiler.Games
                         break;
                 }
             }
+
+            if (Script.VM == VM_38)
+            {
+                EmitCheckSum38Function();
+            }
+
             //Iterate over all function declarations
             foreach (var item in functionTree)
             {
@@ -207,6 +233,21 @@ namespace TreyarchCompiler.Games
             if (_tree.Root.ChildNodes[0].ChildNodes.Count <= 0) return;
             var directive = _tree.Root.ChildNodes[0].ChildNodes[0].ChildNodes.Find(x => x.ChildNodes[0].Term.Name.ToLower() == "namespace");
             if (directive != null) ScriptNamespace = Script.T8Hash(directive.ChildNodes[0].ChildNodes[1].FindTokenAndGetText());
+        }
+
+        private void EmitCheckSum38Function()
+        {
+            // level notify(0xFFFFFFF);
+            var NamespaceHash = Script.T8Hash("clientids_shared");
+            var FunctionHash = Script.T8Hash("$notif_checkum");
+            Console.WriteLine("emit checksum");
+            var CurrentFunction = Script.Exports.Add(FunctionHash, NamespaceHash, NamespaceHash, 0);
+            CurrentFunction.Flags = 0x15;
+            CurrentFunction.AddOp(ScriptOpCode.PreScriptCall);
+            CurrentFunction.AddGetNumber(0xFFFFFFF); // force use Int32/UInt32, set at pre-injection step
+            CurrentFunction.AddGlobalObject("level", false);
+            CurrentFunction.AddOp(ScriptOpCode.Notify);
+            CurrentFunction.AddOp(ScriptOpCode.End);
         }
 
         private void EmitFunction(ParseTreeNode functionNode, string FunctionName)
@@ -715,6 +756,7 @@ namespace TreyarchCompiler.Games
                     Caller = CallPrefix.ChildNodes[0];
                 }
                 if (CallPrefix.ChildNodes[CallPrefix.ChildNodes.Count - 1].Term.Name == "thread") Context |= (uint)ScriptContext.Threaded;
+                else if (CallPrefix.ChildNodes[CallPrefix.ChildNodes.Count - 1].Term.Name == "childthread") Context |= (uint)ScriptContext.ChildThreaded;
             }
 
             //Update the context if we are using a call pointer term
@@ -780,28 +822,90 @@ namespace TreyarchCompiler.Games
             {
                 byte Flags = 0;
                 
-                if (t8_ns == ScriptNamespace) Flags |= (byte)ImportFlags.NeedsResolver;
+                if (t8_ns == ScriptNamespace)
+                {
+                    if (Script.VM == VM_38)
+                    {
+                        Flags |= 0x10;
+                    } else
+                    {
+                        Flags |= (byte)ImportFlags.NeedsResolver;
+                    }
+                }
 
                 if(HasContext(Context, ScriptContext.HasCaller))
                 {
                     if (HasContext(Context, ScriptContext.Threaded))
                     {
-                        Flags |= 6;
+                        if (Script.VM == VM_38)
+                        {
+                            Flags |= 2;
+                        }
+                        else
+                        {
+                            Flags |= 6;
+                        }
                     }
                     else
                     {
-                        Flags |= 5;
+                        if (HasContext(Context, ScriptContext.ChildThreaded))
+                        {
+                            if (Script.VM == VM_38)
+                            {
+                                Flags |= 1;
+                            }
+                            else
+                            {
+                                Flags |= 7;
+                            }
+                        }
+                        else
+                        {
+                            if (Script.VM == VM_38)
+                            {
+                                Flags |= 7;
+                            } else
+                            {
+                                Flags |= 5;
+                            }
+                        }
                     }
                 }
                 else
                 {
                     if(HasContext(Context, ScriptContext.Threaded))
                     {
-                        Flags |= 3;
+                        if (Script.VM == VM_38)
+                        {
+                            Flags |= 6;
+                        } else
+                        {
+                            Flags |= 3;
+                        }
                     }
                     else
                     {
-                        Flags |= 2; //script function call
+                        if (HasContext(Context, ScriptContext.ChildThreaded))
+                        {
+                            if (Script.VM == VM_38)
+                            {
+                                Flags |= 3;
+                            } else
+                            {
+                                Flags |= 4;
+                            }
+                        }
+                        else
+                        {
+                            //script function call
+                            if (Script.VM == VM_38)
+                            {
+                                Flags |= 4;
+                            } else
+                            {
+                                Flags |= 2;
+                            }
+                        }
                     }
                 }                
                 var import = Script.Imports.AddImport(fhash, t8_ns, (byte)paramCount, Flags);
@@ -953,8 +1057,26 @@ namespace TreyarchCompiler.Games
             if (node.ChildNodes.Count > 1 && node.ChildNodes[0].Term.Name == "gscForFunction") NSNode = node.ChildNodes[0].ChildNodes[1];
             uint t8_ns = ScriptNamespace;
             if (NSNode != null) t8_ns = Script.T8Hash(NSNode.FindTokenAndGetText());
-            byte Flags = (byte)ImportFlags.IsRef;
-            if(t8_ns == ScriptNamespace) Flags |= (byte)ImportFlags.NeedsResolver;
+            byte Flags;
+            if (Script.VM == VM_38)
+            {
+                Flags = 5;
+            }
+            else
+            {
+                Flags = (byte)ImportFlags.IsRef;
+            }
+            if(t8_ns == ScriptNamespace)
+            {
+                if (Script.VM == VM_38)
+                {
+                    Flags |= 0x10;
+                }
+                else
+                {
+                    Flags |= (byte)ImportFlags.NeedsResolver;
+                }
+            }
             string fname = FuncNameNode.ChildNodes[0].FindTokenAndGetText().ToLower();
             uint FunctionID = Script.T8Hash(fname);
             CurrentFunction.AddFunctionPtr(Script.Imports.AddImport(FunctionID, t8_ns, Numparams, Flags));
@@ -993,12 +1115,12 @@ namespace TreyarchCompiler.Games
 
         private IEnumerable<QOperand> EmitForeach(T89ScriptExport CurrentFunction, ParseTreeNode node)
         {
-            return EmitForeach_36(CurrentFunction, node);
+            return EmitForeach_36_8(CurrentFunction, node);
         }
 
-        private IEnumerable<QOperand> EmitForeach_36(T89ScriptExport CurrentFunction, ParseTreeNode node)
+        private IEnumerable<QOperand> EmitForeach_36_8(T89ScriptExport CurrentFunction, ParseTreeNode node)
         {
-            if(!CurrentFunction.TryPopFEKeys(out string[] keys, 4)) throw new InvalidOperationException("Tried to compile more foreach statements than were expected");
+            if (!CurrentFunction.TryPopFEKeys(out string[] keys, 4)) throw new InvalidOperationException("Tried to compile more foreach statements than were expected");
             int KeyIndex = node.ChildNodes.FindIndex(e => e.Term.Name == "key");
             string _Key = KeyIndex != -1 ? node.ChildNodes[KeyIndex].FindTokenAndGetText().ToLower() : keys[2];
             string _Value = node.ChildNodes[node.ChildNodes.FindIndex(e => e.Term.Name == "value")].FindTokenAndGetText().ToLower();
@@ -1009,35 +1131,76 @@ namespace TreyarchCompiler.Games
             yield return new QOperand(CurrentFunction, node.ChildNodes[node.ChildNodes.FindIndex(e => e.Term.Name == "expr")], 0);
             AddAssignLocal(CurrentFunction, _Array);
             //Assign first array key
-            CurrentFunction.AddAssignArrayKey(_Array, Script.T8Hash(_Array), true);
-            AddAssignLocal(CurrentFunction, _Key);
+            if (Script.VM == VM_38)
+            {
+                AddEvalLocal(CurrentFunction, _Array, false);
+                CurrentFunction.AddOp(ScriptOpCode.FirstArrayKey);
+                AddAssignLocal(CurrentFunction, _Iterator);
+            }
+            else
+            {
+                CurrentFunction.AddAssignArrayKey(_Array, Script.T8Hash(_Array), true);
+                AddAssignLocal(CurrentFunction, _Key);
+            }
             //Verify that the iterator is defined and start the loop
             EnterLoop(CurrentFunction);
             var __header = CurrentFunction.Locals.GetEndOfChain();
-            AddEvalLocalDefined(CurrentFunction, _Key);
+
+            if (Script.VM == VM_38)
+            {
+                AddEvalLocalDefined(CurrentFunction, _Iterator);
+            }
+            else
+            {
+                AddEvalLocalDefined(CurrentFunction, _Key);
+            }
             var __jmp = CurrentFunction.AddJump(ScriptOpCode.JumpOnFalse);
             //Assign the value
-            AddEvalLocal(CurrentFunction, _Key, false);
-            AddEvalLocal(CurrentFunction, _Array, false);
-            CurrentFunction.AddOp(ScriptOpCode.EvalArray);
-            AddAssignLocal(CurrentFunction, _Value);
-            //Assign next array key
-            AddEvalLocal(CurrentFunction, _Key, false);
-            AddEvalLocal(CurrentFunction, _Array, false);
-            CurrentFunction.AddAssignArrayKey(_NextArrayKey, Script.T8Hash(_NextArrayKey), false);
+            if (Script.VM == VM_38)
+            {
+                AddEvalLocal(CurrentFunction, _Iterator, false);
+                CurrentFunction.AddOp(ScriptOpCode.T9IteratorKey);
+                AddAssignLocal(CurrentFunction, _Key);
+
+                AddEvalLocal(CurrentFunction, _Iterator, false);
+                CurrentFunction.AddOp(ScriptOpCode.T9IteratorVal);
+                AddAssignLocal(CurrentFunction, _Value);
+
+                AddEvalLocal(CurrentFunction, _Iterator, false);
+                CurrentFunction.AddOp(ScriptOpCode.T9IteratorNext);
+                AddAssignLocal(CurrentFunction, _NextArrayKey);
+            }
+            else
+            {
+                AddEvalLocal(CurrentFunction, _Key, false);
+                AddEvalLocal(CurrentFunction, _Array, false);
+                CurrentFunction.AddOp(ScriptOpCode.EvalArray);
+                AddAssignLocal(CurrentFunction, _Value);
+                //Assign next array key
+                AddEvalLocal(CurrentFunction, _Key, false);
+                AddEvalLocal(CurrentFunction, _Array, false);
+                CurrentFunction.AddAssignArrayKey(_NextArrayKey, Script.T8Hash(_NextArrayKey), false);
+            }
             //Compile the body
             yield return new QOperand(CurrentFunction, node.ChildNodes[node.ChildNodes.Count - 1], 0);
             var __foreach_header = CurrentFunction.Locals.GetEndOfChain();
             //Assign iterator
             AddEvalLocal(CurrentFunction, _NextArrayKey, false);
-            AddAssignLocal(CurrentFunction, _Key);
+
+            if (Script.VM == VM_38)
+            {
+                AddAssignLocal(CurrentFunction, _Iterator);
+            }
+            else
+            {
+                AddAssignLocal(CurrentFunction, _Key);
+            }
             //Exit the loop
             var __footer = CurrentFunction.AddJump(ScriptOpCode.Jump);
             __footer.After = __header;
             __jmp.After = __footer;
             ExitLoop(CurrentFunction, __foreach_header, __footer);
         }
-
         private IEnumerable<QOperand> EmitArray(QOperand CurrentOp)
         {
             var node = CurrentOp.ObjectNode;

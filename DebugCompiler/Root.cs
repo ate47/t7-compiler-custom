@@ -954,6 +954,7 @@ namespace DebugCompiler
             {
                 case Games.T7: return InjectT7(replacePath, buffer, cfg.Hot, cfg.Noruntime);
                 case Games.T8: return InjectT8(replacePath, buffer, cfg, client);
+                case Games.T9: return InjectT9(replacePath, buffer, cfg, client);
             }
             return Error("Invalid game provided to inject.");
         }
@@ -1183,7 +1184,7 @@ namespace DebugCompiler
                 string preamble = Encoding.ASCII.GetString(buffer.Take(4).ToArray());
                 if (preamble != "GSIC")
                 {
-                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops III.");
+                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops 4.");
                 }
                 using (MemoryStream ms = new MemoryStream(buffer))
                 using (BinaryReader reader = new BinaryReader(ms))
@@ -1264,7 +1265,7 @@ namespace DebugCompiler
                     cache.Target = spt;
                     cache.hTarget = sptGlob + (ulong)(i * Marshal.SizeOf(typeof(T8SPT)));
                 }
-                if(cache.hSurrogate && cache.hTarget)
+                if (cache.hSurrogate && cache.hTarget)
                 {
                     break;
                 }
@@ -1293,7 +1294,7 @@ namespace DebugCompiler
                 bo4.SetValue(includeTable + (includeCount * 8), targetScript);
                 bo4.SetValue(cache.Surrogate.Buffer + includeOff, (byte)(includeCount + 1));
 
-                patchBuff:
+            patchBuff:
                 bo4.GetBytes(cache.Target.Buffer + 0x8, 8).CopyTo(buffer, 0x8); // crc32
                 bo4.GetBytes(cache.Target.Buffer + 0x10, 8).CopyTo(buffer, 0x10); // ScriptName
                 cache.hBuffer = bo4.QuickAlloc(buffer.Length); // space
@@ -1341,18 +1342,15 @@ namespace DebugCompiler
                             }
                         }
                     }
-                }
-                catch (Exception e)
+                } catch (Exception e)
                 {
                     Console.WriteLine(e.ToString());
                     return 3;
                 }
-            }
-            catch
+            } catch
             {
                 return Error("Unknown error while injecting...");
-            }
-            finally
+            } finally
             {
                 bo4.CloseHandle();
             }
@@ -1429,7 +1427,308 @@ namespace DebugCompiler
             {
                 bo4.CloseHandle();
             }
-}
+        }
+
+        private T9InjectCache InjectCacheT9 = new T9InjectCache();
+        private T9InjectCache InjectCacheClientT9 = new T9InjectCache();
+
+        private int InjectT9(string replacePath, byte[] buffer, CompilerConfig cfg, bool client)
+        {
+            if (client)
+            {
+                NoExcept(FreeT9ScriptClient);
+            } else
+            {
+                NoExcept(FreeT9ScriptServer);
+            }
+            GSICInfoT8 gsi = null;
+            if (BitConverter.ToInt64(buffer, 0) != 0x38000A0D43534780)
+            {
+                string preamble = Encoding.ASCII.GetString(buffer.Take(4).ToArray());
+                if (preamble != "GSIC")
+                {
+                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops Cold War.");
+                }
+                using (MemoryStream ms = new MemoryStream(buffer))
+                using (BinaryReader reader = new BinaryReader(ms))
+                {
+                    T89ScriptObject.GSIFields currentField = T89ScriptObject.GSIFields.Detours;
+                    reader.BaseStream.Position += 4;
+                    gsi = new GSICInfoT8();
+                    for (int numFields = reader.ReadInt32(); numFields > 0; numFields--)
+                    {
+                        currentField = (T89ScriptObject.GSIFields)reader.ReadInt32();
+                        switch (currentField)
+                        {
+                            case T89ScriptObject.GSIFields.Detours:
+                                int numdetours = reader.ReadInt32();
+                                for (int j = 0; j < numdetours; j++)
+                                {
+                                    T89ScriptObject.ScriptDetour detour = new T89ScriptObject.ScriptDetour();
+                                    detour.Deserialize(reader);
+                                    gsi.Detours.Add(detour);
+                                }
+                                break;
+                        }
+                    }
+                    buffer = buffer.Skip((int)reader.BaseStream.Position).ToArray();
+                }
+                if (BitConverter.ToInt64(buffer, 0) != 0x38000A0D43534780)
+                {
+                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops 4.");
+                }
+            }
+            ProcessEx bocw = "blackopscoldwar";
+            if (bocw is null)
+            {
+                return Error("No game process found for Black Ops 4.");
+            }
+
+            bocw.OpenHandle();
+            OriginalPID = bocw.BaseProcess.Id;
+            Console.WriteLine($"s_assetPool:ScriptParseTree => {bocw[0x11E50670 + 0x20 * 68]}");
+            var sptGlob = bocw.GetValue<ulong>(bocw[0x11E50670 + 0x20 * 68]);
+            var sptCount = bocw.GetValue<int>(bocw[0x11E50670 + 0x20 * 68 + 0x14]);
+            var SPTEntries = bocw.GetArray<T9SPT>(sptGlob, sptCount);
+            replacePath = replacePath.ToLower().Trim().Replace("\\", "/");
+            var surrogateScript = T8s64Hash(replacePath); // script we are hooking
+            ulong targetScript; // script we are replacing
+
+            if (client)
+            {
+                targetScript = 0x10aeb2e4f2b455a1;
+            } else
+            {
+                targetScript = 0x124cecff7280be52;
+            }
+            T9InjectCache cache;
+
+            if (client)
+            {
+                cache = InjectCacheClientT9;
+            } else
+            {
+                cache = InjectCacheT9;
+            }
+
+
+            cache.hSurrogate = 0;
+            cache.hTarget = 0;
+
+            for (int i = 0; i < SPTEntries.Length; i++)
+            {
+                var spt = SPTEntries[i];
+                if (spt.ScriptName == surrogateScript)
+                {
+                    cache.Surrogate = spt;
+                    cache.hSurrogate = sptGlob + (ulong)(i * Marshal.SizeOf(typeof(T9SPT)));
+                }
+                if (spt.ScriptName == targetScript)
+                {
+                    cache.Target = spt;
+                    cache.hTarget = sptGlob + (ulong)(i * Marshal.SizeOf(typeof(T9SPT)));
+                }
+                if (cache.hSurrogate && cache.hTarget)
+                {
+                    break;
+                }
+            }
+
+            try
+            {
+                if (!cache.hSurrogate || !cache.hTarget)
+                {
+                    return Error("Unable to identify critical injection information. Double check your script path, and try restarting the game. Make sure you are injecting in the pregame lobby.");
+                }
+
+                int includeOff = 0x24;
+                int tableOff = 0x34;
+                int exportsCount = 0x1A;
+                int exportsTable = 0x38;
+
+                // patch include
+                byte includeCount = bocw.GetValue<byte>(cache.Surrogate.Buffer + includeOff);
+                PointerEx includeTable = cache.Surrogate.Buffer + bocw.GetValue<int>(cache.Surrogate.Buffer + tableOff);
+                for (int i = 0; i < includeCount; i++)
+                {
+                    if (bocw.GetValue<ulong>(includeTable + (i * 8)) == targetScript)
+                    {
+                        goto patchBuff;
+                    }
+                }
+                bocw.SetValue(includeTable + (includeCount * 8), targetScript);
+                bocw.SetValue(cache.Surrogate.Buffer + includeOff, (byte)(includeCount + 1));
+
+            patchBuff:
+                var checksum = bocw.GetValue<int>(cache.Target.Buffer + 0x8);
+
+                BitConverter.GetBytes(checksum).CopyTo(buffer, 0x8);// crc32
+
+                var exportCounts = BitConverter.ToInt16(buffer, exportsCount);
+
+                if (exportCounts == 0)
+                {
+                    return Error("Trying to inject empty script without checksum.");
+                }
+
+                var exportOffset = BitConverter.ToInt16(buffer, exportsTable);
+
+                if (BitConverter.ToInt32(buffer, exportOffset + 8) != 0xB27A73) // $notif_checkum
+                {
+                    return Error("Invalid notify checksum export.");
+                }
+
+                var address = BitConverter.ToInt32(buffer, exportOffset + 4);
+
+                // fixup checksum
+                if (checksum >= 0)
+                {
+                    buffer[address + 0x4] = 0xc7;
+                    buffer[address + 0x5] = 0; // GetUInt
+                    BitConverter.GetBytes((uint)(checksum)).CopyTo(buffer, address + 0x8);
+                }
+                else
+                {
+                    buffer[address + 0x4] = 0xee;
+                    buffer[address + 0x5] = 0; // GetNegUInt
+                    BitConverter.GetBytes((uint)(-checksum)).CopyTo(buffer, address + 0x8);
+                }
+
+
+                bocw.GetBytes(cache.Target.Buffer + 0x10, 8).CopyTo(buffer, 0x10); // ScriptName
+                cache.hBuffer = bocw.QuickAlloc(buffer.Length); // space
+                bocw.SetBytes(cache.hBuffer, buffer); // write to proc
+                bocw.SetValue<long>(cache.hTarget + 0x8, cache.hBuffer); // buffer pointer redirect
+                cache.Pid = bocw.BaseProcess.Id;
+                cache.BufferSize = buffer.Length;
+                cache.IsInjected = true;
+
+                try
+                {
+                    if (cfg.InjectDLL)
+                    {
+                        /*
+                        string exeFilePath = Assembly.GetExecutingAssembly().Location;
+                        var result = bo4.Call<long>(bo4.GetProcAddress(@"kernel32.dll", @"LoadLibraryA"), Path.Combine(Path.GetDirectoryName(exeFilePath), "t9cinternal.dll"));
+                        bo4.Refresh();
+
+                        if (result == 0)
+                        {
+                            return 4;
+                        }
+
+                        if (cfg.DllBuiltins)
+                        {
+                            bo4.Call<VOID>(bo4.GetProcAddress(@"t9cinternal.dll", @"T8Dll_BuiltinsInit"));
+                        }
+                        if (cfg.DllLazyLink)
+                        {
+                            bo4.Call<VOID>(bo4.GetProcAddress(@"t9cinternal.dll", @"T8Dll_LazyLinkInit"));
+                        }
+                        if (cfg.DllDetours)
+                        {
+                            bo4.Call<VOID>(bo4.GetProcAddress(@"t9cinternal.dll", @"T8Dll_DetoursInit"));
+                            if (gsi != null)
+                            {
+                                // detours
+                                if (gsi.Detours.Count > 0)
+                                {
+                                    bo4.Call<VOID>(bo4.GetProcAddress(@"t9cinternal.dll", @"RegisterDetours"), gsi.PackDetours(), gsi.Detours.Count, (long)cache.hBuffer, client ? 1 : 0);
+                                }
+                            } else
+                            {
+                                // done inside RegisterDetours, useless with gsi
+                                bo4.Call<VOID>(bo4.GetProcAddress(@"t9cinternal.dll", @"RemoveDetours"), client ? 1 : 0);
+                            }
+                        }
+                        */
+                    }
+                } catch (Exception e)
+                {
+                    Console.WriteLine(e.ToString());
+                    return 3;
+                }
+            } catch (Exception e)
+            {
+                return Error($"Unknown error while injecting... {e}");
+            } finally
+            {
+                bocw.CloseHandle();
+            }
+
+            return 0;
+        }
+
+        private void FreeT9Script()
+        {
+            ProcessEx bo4 = "blackopscoldwar";
+            if (bo4 is null)
+            {
+                return;
+            }
+
+            FreeT9ScriptCache(bo4, false);
+            FreeT9ScriptCache(bo4, true);
+        }
+
+        private void FreeT9ScriptClient()
+        {
+            ProcessEx bocw = "blackopscoldwar";
+            if (bocw is null)
+            {
+                return;
+            }
+
+            FreeT9ScriptCache(bocw, true);
+        }
+
+        private void FreeT9ScriptServer()
+        {
+            ProcessEx bocw = "blackopscoldwar";
+            if (bocw is null)
+            {
+                return;
+            }
+
+            FreeT9ScriptCache(bocw, false);
+        }
+
+        private void FreeT9ScriptCache(ProcessEx bocw, bool client)
+        {
+            T9InjectCache cache;
+
+            if (client)
+            {
+                cache = InjectCacheClientT9;
+            } else
+            {
+                cache = InjectCacheT9;
+            }
+
+            if (!cache.IsInjected)
+            {
+                return;
+            }
+
+            if (bocw.BaseProcess.Id != cache.Pid)
+            {
+                return;
+            }
+            bocw.OpenHandle();
+            try
+            {
+                // free allocated space
+                ProcessEx.VirtualFreeEx(bocw.Handle, cache.hBuffer, (uint)cache.BufferSize, (int)EnvironmentEx.FreeType.Release);
+
+                // Patch spt struct
+                bocw.SetStruct(cache.hTarget, cache.Target);
+                bocw.Call<VOID>(bocw.GetProcAddress(@"t9cinternal.dll", @"RemoveDetours"), client ? 1 : 0);
+                cache.IsInjected = false;
+            } finally
+            {
+                bocw.CloseHandle();
+            }
+        }
 
         private void FreeT7Script()
         {
@@ -1464,6 +1763,18 @@ namespace DebugCompiler
             public bool IsInjected;
         }
 
+        private class T9InjectCache
+        {
+            public T9SPT Surrogate;
+            public T9SPT Target;
+            public PointerEx hSurrogate;
+            public PointerEx hTarget;
+            public PointerEx hBuffer;
+            public int BufferSize;
+            public int Pid;
+            public bool IsInjected;
+        }
+
         [StructLayout(LayoutKind.Sequential, Pack = 2)]
         struct T7SPT
         {
@@ -1478,6 +1789,15 @@ namespace DebugCompiler
         {
             public PointerEx ScriptName;
             public long pad0;
+            public PointerEx Buffer;
+            public int Size;
+            public int Unk0;
+        };
+
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct T9SPT
+        {
+            public PointerEx ScriptName;
             public PointerEx Buffer;
             public int Size;
             public int Unk0;

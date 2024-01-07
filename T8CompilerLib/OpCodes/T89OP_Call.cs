@@ -9,11 +9,11 @@ namespace T89CompilerLib.OpCodes
         {
             if (context.HasContext(ScriptContext.HasCaller))
             {
-                Code = context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptMethodThreadCall : ScriptOpCode.ScriptMethodCall;
+                Code = context.HasContext(ScriptContext.ChildThreaded) ? ScriptOpCode.ScriptMethodChildThreadCall : context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptMethodThreadCall : ScriptOpCode.ScriptMethodCall;
             }
             else
             {
-                Code = context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptThreadCall : ScriptOpCode.ScriptFunctionCall;
+                Code = context.HasContext(ScriptContext.ChildThreaded) ? ScriptOpCode.ScriptChildThreadCall : context.HasContext(ScriptContext.Threaded) ? ScriptOpCode.ScriptThreadCall : ScriptOpCode.ScriptFunctionCall;
             }
             Import = import;
         }

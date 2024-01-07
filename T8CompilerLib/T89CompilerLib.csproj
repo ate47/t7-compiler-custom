@@ -103,6 +103,7 @@
     <Compile Include="OpCodes\T89OP_Return.cs" />
     <Compile Include="OpCodes\T89OP_SafeCreateLocalVariables.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ScriptComponents\T89EventStringsSection.cs" />
     <Compile Include="ScriptComponents\T89ExportsSection.cs" />
     <Compile Include="ScriptComponents\T89GlobalObjectsSection.cs" />
     <Compile Include="ScriptComponents\T89ImportSection.cs" />
