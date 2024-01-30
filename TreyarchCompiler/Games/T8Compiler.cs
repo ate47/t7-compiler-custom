@@ -36,7 +36,7 @@ namespace TreyarchCompiler.Games
         {
             Game = game;
             _tree = NewSyntax.ThreadSafeInstance.SyntaxParser.Parse(code);
-            Script = new T89ScriptObject(game == Enums.Games.T9 ? VM_38 : VM_36, plt == Platforms.PS4 ? PLATFORM.PC : plt == Platforms.Xbox ? PLATFORM.XBOX : PLATFORM.PC);
+            Script = new T89ScriptObject(game == Enums.Games.T9 ? VM_38 : VM_36, plt == Platforms.PS4 ? PLATFORM.PS4 : plt == Platforms.Xbox ? PLATFORM.XBOX : PLATFORM.PC);
             Script.Header.ScriptName = Script.T8s64Hash("scripts/core_common/clientids_shared.gsc");
             FunctionMetadata = new Dictionary<string, ScriptFunctionMetaData>();
         }
@@ -244,7 +244,7 @@ namespace TreyarchCompiler.Games
             var CurrentFunction = Script.Exports.Add(FunctionHash, NamespaceHash, NamespaceHash, 0);
             CurrentFunction.Flags = 0x15;
             CurrentFunction.AddOp(ScriptOpCode.PreScriptCall);
-            CurrentFunction.AddGetNumber(0xFFFFFFF); // force use Int32/UInt32, set at pre-injection step
+            CurrentFunction.AddGetNumber(Script.Header.SourceChecksum); // force use Int32/UInt32, set at pre-injection step
             CurrentFunction.AddGlobalObject("level", false);
             CurrentFunction.AddOp(ScriptOpCode.Notify);
             CurrentFunction.AddOp(ScriptOpCode.End);

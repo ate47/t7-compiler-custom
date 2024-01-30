@@ -57,41 +57,7 @@ namespace DebugCompiler
             ParseCmdArgs(args, out string[] arguments, out string[] options);
 
             string lv = GetEmbeddedVersion();
-            Console.WriteLine($"T7/T8 Compiler version {lv}, by Serious\n");
-
-            if (!options.Contains("--noupdate"))
-            {
-                try
-                {
-                    motd();
-                    ulong local_version = ParseVersion(lv);
-                    ulong remote_version = 0;
-                    Console.WriteLine($"Checking client version... (our version is {local_version:X})");
-                    using (WebClient client = new WebClient())
-                    {
-                        string downloadString = client.DownloadString(UpdatesURL);
-                        remote_version = ParseVersion(downloadString.ToLower().Trim());
-                    }
-                    if (local_version < remote_version)
-                    {
-                        Console.WriteLine("Client out of date, downloading installer...");
-                        string filename = Path.Combine(Path.GetTempPath(), "t7c_installer.exe");
-                        if (File.Exists(filename)) File.Delete(filename);
-                        using (WebClient client = new WebClient())
-                        {
-                            client.DownloadFile(UpdaterURL, filename);
-                        }
-                        Console.WriteLine("Installing update... Please wait for a confirmation window to pop up before attempting to inject again...");
-                        Process.Start(filename, "--install_silent");
-                        return 0;
-                    }
-                } catch
-                {
-                    // we dont care if we cant update tbf
-                    Console.WriteLine($"Error updating client... ignoring update");
-                }
-            }
-
+            Console.WriteLine($"T7/T8/T9 Compiler version {lv}, by Serious\n");
 
             Root root = new Root();
             if (options.Contains("--build") || options.Contains("--compile"))
@@ -621,6 +587,16 @@ namespace DebugCompiler
                             Game = game;
                         }
                         break;
+                    case "platform":
+                        if (!Enum.TryParse(split[1].ToLower().Trim().Replace("\\", "/"), true, out Platforms plt))
+                        {
+                            Platform = Platforms.PC;
+                        } else
+                        {
+                            Platform = plt;
+                        }
+                        break;
+                        
                     case "hot":
                         if (!Enum.TryParse(split[1].ToLower().Trim(), true, out hotmode hot))
                         {
@@ -822,6 +798,7 @@ namespace DebugCompiler
                     return Error(e.Message);
                 }
 
+                Console.WriteLine($"Compiling for {cfg.Game}/{cfg.Platform}...");
                 code = Compiler.Compile(cfg.Platform, cfg.Game, Modes.MP, false, source);
                 if (code.Error != null && code.Error.Length > 0)
                 {
@@ -927,6 +904,9 @@ namespace DebugCompiler
                     break;
                 case Games.T8:
                     NoExcept(FreeT8Script);
+                    break;
+                case Games.T9:
+                    NoExcept(FreeT9Script);
                     break;
             }
         }
