@@ -12,7 +12,7 @@ namespace TreyarchCompiler.Utilities
         public byte[] OpcodeMap;
         public byte[] Dll;
         public bool RequiresGSI;
-        public Dictionary<uint, string> HashMap;
+        public Dictionary<ulong, string> HashMap;
         public List<uint> OpcodeEmissions;
 
         internal CompiledCode()
@@ -22,7 +22,7 @@ namespace TreyarchCompiler.Utilities
             CompiledScript = new byte[0];
             WriteData = new Dictionary<uint, byte[]>();
             Dll = new byte[0];
-            HashMap = new Dictionary<uint, string>();
+            HashMap = new Dictionary<ulong, string>();
             OpcodeEmissions = new List<uint>();
         }
     }

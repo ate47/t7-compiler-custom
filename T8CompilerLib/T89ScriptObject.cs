@@ -42,11 +42,11 @@ namespace T89CompilerLib
             "script_"
         };
         public byte[] RawData;
-        internal Dictionary<uint, string> HashMap = new Dictionary<uint, string>();
+        internal Dictionary<ulong, string> HashMap = new Dictionary<ulong, string>();
 
-        public Dictionary<uint, string> GetHashMap()
+        public Dictionary<ulong, string> GetHashMap()
         {
-            Dictionary<uint, string> local = new Dictionary<uint, string>();
+            Dictionary<ulong, string> local = new Dictionary<ulong, string>();
             foreach (var kvp in HashMap)
             {
                 local[kvp.Key] = kvp.Value;
@@ -222,10 +222,14 @@ namespace T89CompilerLib
                 return result;
             }
 
-            return 0x7FFFFFFFFFFFFFFF & HashFNV1a(Encoding.ASCII.GetBytes(input));
+            var val = 0x7FFFFFFFFFFFFFFF & HashFNV1a(Encoding.ASCII.GetBytes(input));
+
+            HashMap[val] = input;
+
+            return val;
         }
 
-        private static ulong Unk0Hash(string input)
+        private ulong Unk0Hash(string input)
         {
             uint hash = 0x4B9ACE2F;
             input = input.ToLower();
@@ -236,7 +240,7 @@ namespace T89CompilerLib
             return 0x8001 * ((9 * hash) ^ ((9 * hash) >> 11));
         }
 
-        private static ulong HashFNV1a(byte[] bytes, ulong fnv64Offset = 14695981039346656037, ulong fnv64Prime = 0x100000001b3)
+        private ulong HashFNV1a(byte[] bytes, ulong fnv64Offset = 14695981039346656037, ulong fnv64Prime = 0x100000001b3)
         {
             ulong hash = fnv64Offset;
 

@@ -57,7 +57,8 @@ namespace DebugCompiler
             ParseCmdArgs(args, out string[] arguments, out string[] options);
 
             string lv = GetEmbeddedVersion();
-            Console.WriteLine($"T7/T8/T9 Compiler version {lv}, by Serious\n");
+            Console.WriteLine("Custom Treyarch Compiler\n");
+            Console.WriteLine("Original: https://github.com/shiversoftdev/t7-compiler");
 
             Root root = new Root();
             if (options.Contains("--build") || options.Contains("--compile"))
@@ -70,19 +71,11 @@ namespace DebugCompiler
                 return root.cmd_Inject(arguments, options);
             }
 
-            root.AddCommand(ConsoleKey.Q, "Quit Program", root.cmd_Exit);
-            root.AddCommand(ConsoleKey.H, "Hash String [fnv|fnv64|gsc] <baseline> <prime> [input]", root.cmd_HashString);
-            root.AddCommand(ConsoleKey.T, "Toggle Text History", root.cmd_ToggleNoClear);
-            root.AddCommand(ConsoleKey.C, "Compile Script [path] <T7|T8>", root.cmd_Compile);
-            root.AddCommand(ConsoleKey.I, "Inject Script [path] <T7|T8> <inject path>", root.cmd_Inject);
-            while (true)
-            {
-                try { root.Exec(root.PrintOptions()); }
-                catch(Exception e)
-                {
-                    root.Error(e.ToString());
-                }
-            }
+            Console.WriteLine("--inject : Inject script");
+            Console.WriteLine("--build : Build and inject script");
+            Console.WriteLine("--compile : Compile script");
+
+            return 0;
         }
 
         static ulong ParseVersion(string vstr)
@@ -538,6 +531,7 @@ namespace DebugCompiler
             internal string ReplaceScript { get; set; }  = null;
             internal string ReplaceScriptClient { get; set; }  = null;
             internal string ScriptLocation { get; set; }  = "scripts";
+            internal string OutputName { get; set;} = "compiled";
 
             internal void ReadConfig(string line)
             {
@@ -560,12 +554,15 @@ namespace DebugCompiler
                     case "scriptlocation":
                         ScriptLocation = split[1];
                         break;
+                    case "outputname":
+                        OutputName = split[1];
+                        break;
                     case "client":
                         InjectClient = split[1].ToLower().Trim() == "true";
                         break;
                     case "server":
                         InjectServer = split[1].ToLower().Trim() == "true";
-                        break;
+                        break; 
                     case "dll":
                         InjectDLL = split[1].ToLower().Trim() == "true";
                         break;
@@ -825,21 +822,21 @@ namespace DebugCompiler
                     return Error(code.Error);
                 }
 
-                string cpath = $"compiled.{(client ? (code.RequiresGSI ? "csic" : "cscc") : (code.RequiresGSI ? "gsic" : "gscc"))}";
+                string cpath = $"{cfg.OutputName}.{(client ? (code.RequiresGSI ? "csic" : "cscc") : (code.RequiresGSI ? "gsic" : "gscc"))}";
                 File.WriteAllBytes(cpath, code.CompiledScript);
                 foreach (var kvp in code.HashMap)
                 {
                     hashes.AppendLine($"0x{kvp.Key:X}, {kvp.Value}");
                 }
 
-                if (code.OpcodeEmissions != null)
+                if (code.OpcodeEmissions != null && code.OpcodeEmissions.Count != 0)
                 {
                     byte[] opsRaw = new byte[code.OpcodeEmissions.Count * 4];
                     for (int i = 0; i < code.OpcodeEmissions.Count; i++)
                     {
                         BitConverter.GetBytes(code.OpcodeEmissions[i]).CopyTo(opsRaw, i * 4);
                     }
-                    File.WriteAllBytes(client ? "compiledclient.omap" : "compiled.omap", opsRaw);
+                    File.WriteAllBytes(client ? $"{cfg.OutputName}.omap" : $"{cfg.OutputName}.omap", opsRaw);
                 }
                 Success(cpath);
 
@@ -1455,13 +1452,13 @@ namespace DebugCompiler
                 }
                 if (BitConverter.ToInt64(buffer, 0) != 0x38000A0D43534780)
                 {
-                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops 4.");
+                    return Error("Script is not a valid compiled script. Please use a script compiled for Black Ops Cold War.");
                 }
             }
             ProcessEx bocw = "blackopscoldwar";
             if (bocw is null)
             {
-                return Error("No game process found for Black Ops 4.");
+                return Error("No game process found for Black Ops Cold War.");
             }
 
             bocw.OpenHandle();
