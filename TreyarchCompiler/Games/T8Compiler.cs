@@ -48,7 +48,7 @@ namespace TreyarchCompiler.Games
             try { CompileTree(); }
             catch (Exception ex)
             {
-                data.Error = ex.Message;
+                data.Error = $"{ex.Message}\n{ex.StackTrace}";
                 return data;
             }
             var assemble_ticks = DateTime.Now.Ticks;
@@ -58,7 +58,7 @@ namespace TreyarchCompiler.Games
                 data.CompiledScript = Script.Serialize();
                 data.HashMap = Script.GetHashMap();
             } 
-            catch (Exception ex) { data.Error = ex.Message; }
+            catch (Exception ex) { data.Error = $"{ex.Message} {ex.StackTrace}"; }
             var finalticks = DateTime.Now.Ticks;
             //Temporary debugging stats to keep track of compiler speed
             Console.WriteLine($"{ TimeSpan.FromTicks(finalticks - ticks).TotalMilliseconds } ms compile time (excluding irony)");
@@ -80,6 +80,15 @@ namespace TreyarchCompiler.Games
                 return (byte)ScriptExportFlagsT9.AutoExec;
             }
             return (byte)ExportFlags.AutoExec;
+        }
+
+        private byte GetVariadicByVM()
+        {
+            if (Script.VM == VM_38)
+            {
+                return (byte)ScriptExportFlagsT9.VirtualParams;
+            }
+            return (byte)ExportFlags.VirtualParams;
         }
 
         private byte GetEventByVM()
@@ -144,13 +153,23 @@ namespace TreyarchCompiler.Games
                         break;
 
                     case "functionframe":
+                    {
                         FunctionFrame = directive.ChildNodes[0];
-                        if (FunctionFrame.ChildNodes[0].Term.Name == "autoexec") flags |= GetAutoExecByVM();
-                        if (FunctionFrame.ChildNodes[0].Term.Name == "event_handler")
+                        int start = 0;
+                        if (FunctionFrame.ChildNodes[start].Term.Name == "function")
+                        {
+                            start++;
+                        }
+                        if (FunctionFrame.ChildNodes[start].Term.Name == "autoexec")
+                        {
+                            flags |= GetAutoExecByVM();
+                        }
+                        else if (FunctionFrame.ChildNodes[start].Term.Name == "event_handler")
                         {
                             flags |= GetEventByVM();
-                            callbackName = FunctionFrame.ChildNodes[2].Token.ValueString.ToLower();
+                            callbackName = FunctionFrame.ChildNodes[start + 1].Token.ValueString.ToLower();
                         }
+                    }
                         goto functionsLabel;
 
                     case "functions":
@@ -256,9 +275,32 @@ namespace TreyarchCompiler.Games
             var CurrentFunction = Script.Exports.Add(FunctionMetadata[FunctionName].FunctionHash, FunctionMetadata[FunctionName].NamespaceHash, FunctionMetadata[FunctionName].CallbackEventHash, FunctionMetadata[FunctionName].NumParams);
             CurrentFunction.Flags = FunctionMetadata[FunctionName].Flags;
             CurrentFunction.FriendlyName = FunctionName;
-            foreach (var paramNode in Parameters) AddLocal(CurrentFunction, paramNode.FindTokenAndGetText());
+            foreach (var paramNode in Parameters)
+            {
+                
+                switch (paramNode.ChildNodes[0].Term.Name)
+                {
+                    case "&":
+                        AddLocal(CurrentFunction, paramNode.ChildNodes[1].FindTokenAndGetText(), 0x1);
+                        break;
+                    case "*":
+                        if (Script.VM < VM_38)
+                        {
+                            throw new ArgumentException("* can't be used before BOCW");
+                        }
+                        AddLocal(CurrentFunction, paramNode.ChildNodes[1].FindTokenAndGetText(), 0x4);
+                        break;
+                    case "...":
+                        AddLocal(CurrentFunction, "vararg", 0x02);
+                        CurrentFunction.Flags |= GetVariadicByVM();
+                        break;
+                    default:
+                        AddLocal(CurrentFunction, paramNode.FindTokenAndGetText(), 0);
+                        break;
+                }
+            }
             IEnumerable<string> locals = CollectLocalVariables(CurrentFunction, functionNode.ChildNodes[functionNode.ChildNodes.FindIndex(e => e.Term.Name == "block")], false);
-            foreach(var variable in locals) AddLocal(CurrentFunction, variable);
+            foreach(var variable in locals) AddLocal(CurrentFunction, variable, 0);
             ScriptOperands.Clear();
             EmitOptionalParameters(CurrentFunction, Parameters);
             ScriptOperands.Clear();
@@ -282,9 +324,9 @@ namespace TreyarchCompiler.Games
             CurrentFunction.AddEvalLocalDefined(pname, Script.T8Hash(pname));
         }
 
-        private void AddLocal(T89ScriptExport CurrentFunction, string LocalName)
+        private void AddLocal(T89ScriptExport CurrentFunction, string LocalName, byte flags)
         {
-            CurrentFunction.Locals.AddLocal(Script.T8Hash(LocalName));
+            CurrentFunction.Locals.AddLocal(Script.T8Hash(LocalName), flags);
         }
 
         private void Push(T89ScriptExport CurrentFunction, ParseTreeNode node, uint Context)

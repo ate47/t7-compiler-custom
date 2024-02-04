@@ -18,11 +18,23 @@ namespace T89CompilerLib.OpCodes
          * Emit will be o(n) of course.
          */
 
-        private Dictionary<uint, byte> Stack;
+        private class VarInfo
+        {
+            public VarInfo(byte id, byte flags)
+            {
+                this.id = id;
+                this.flags = flags;
+            }
+
+            internal byte id { get; set; }
+            internal byte flags {get; set; }
+        }
+
+        private Dictionary<uint, VarInfo> Stack;
 
         public T89OP_SafeCreateLocalVariables()
         {
-            Stack = new Dictionary<uint, byte>();
+            Stack = new Dictionary<uint, VarInfo>();
         }
 
         protected override ScriptOpCode Code
@@ -48,9 +60,11 @@ namespace T89CompilerLib.OpCodes
 
             foreach(var key in Stack.Keys)
             {
-                uint index = (uint)(Stack[key]) * 8;
+                var value = Stack[key];
+                uint index = (uint)(value.id) * 8;
                 
                 BitConverter.GetBytes(key).CopyTo(data, BaseAddress + index);
+                data[BaseAddress + index + 4] = value.flags;
             }
 
             return data;
@@ -61,7 +75,7 @@ namespace T89CompilerLib.OpCodes
             index = (byte)(Stack.Count + ~(int)index);
 
             foreach (var key in Stack.Keys)
-                if (Stack[key] == index)
+                if (Stack[key].id == index)
                     return key;
             return 0u;
         }
@@ -69,7 +83,7 @@ namespace T89CompilerLib.OpCodes
         public uint GetListValue(byte index)
         {
             foreach (var key in Stack.Keys)
-                if (Stack[key] == index)
+                if (Stack[key].id == index)
                     return key;
             return 0u;
         }
@@ -86,15 +100,16 @@ namespace T89CompilerLib.OpCodes
         /// Add a local variable to the stack and return its reference index
         /// </summary>
         /// <param name="VarHash"></param>
+        /// <param name="flags"></param>
         /// <returns></returns>
-        public byte AddLocal(uint VarHash)
+        public byte AddLocal(uint VarHash, byte flags)
         {
             if (Stack.ContainsKey(VarHash))
-                return (byte)(Stack.Count - Stack[VarHash] - 1);
+                return (byte)(Stack.Count - Stack[VarHash].id - 1);
 
-            Stack[VarHash] = (byte)Stack.Count;
+            Stack[VarHash] = new VarInfo((byte)Stack.Count, flags);
 
-            return (byte)(Stack.Count - Stack[VarHash] - 1);
+            return (byte)(Stack.Count - Stack[VarHash].id - 1);
         }
 
         /// <summary>
@@ -110,7 +125,7 @@ namespace T89CompilerLib.OpCodes
             bool result = Stack.ContainsKey(VarHash);
 
             if (result)
-                Index = (byte)(Stack.Count - Stack[VarHash] - 1);
+                Index = (byte)(Stack.Count - Stack[VarHash].id - 1);
 
             return result;
         }
@@ -121,12 +136,12 @@ namespace T89CompilerLib.OpCodes
         /// <param name="VarHash"></param>
         public void RemoveLocal(uint VarHash)
         {
-            if (!Stack.TryGetValue(VarHash, out byte value))
+            if (!Stack.TryGetValue(VarHash, out VarInfo value))
                 return;
 
             foreach (uint key in Stack.Keys)
-                if (Stack[key] > value)
-                    Stack[key]--;
+                if (Stack[key].id > value.id)
+                    Stack[key].id--;
 
             Stack.Remove(VarHash);
         }
