@@ -36,7 +36,7 @@ namespace TreyarchCompiler.Games
         {
             Game = game;
             _tree = NewSyntax.ThreadSafeInstance.SyntaxParser.Parse(code);
-            Script = new T89ScriptObject(game == Enums.Games.T9 ? VM_38 : VM_36, plt == Platforms.PS4 ? PLATFORM.PS4 : plt == Platforms.Xbox ? PLATFORM.XBOX : PLATFORM.PC);
+            Script = new T89ScriptObject(game == Enums.Games.T9 ? VM_38 : game == Enums.Games.T937 ? VM_37 : VM_36, plt == Platforms.PS4 ? PLATFORM.PS4 : plt == Platforms.Xbox ? PLATFORM.XBOX : PLATFORM.PC);
             Script.Header.ScriptName = Script.T8s64Hash("scripts/core_common/clientids_shared.gsc");
             FunctionMetadata = new Dictionary<string, ScriptFunctionMetaData>();
         }
@@ -284,7 +284,7 @@ namespace TreyarchCompiler.Games
                         AddLocal(CurrentFunction, paramNode.ChildNodes[1].FindTokenAndGetText(), 0x1);
                         break;
                     case "*":
-                        if (Script.VM < VM_38)
+                        if (Script.VM < VM_37)
                         {
                             throw new ArgumentException("* can't be used before BOCW");
                         }
@@ -1173,7 +1173,7 @@ namespace TreyarchCompiler.Games
             yield return new QOperand(CurrentFunction, node.ChildNodes[node.ChildNodes.FindIndex(e => e.Term.Name == "expr")], 0);
             AddAssignLocal(CurrentFunction, _Array);
             //Assign first array key
-            if (Script.VM == VM_38)
+            if (Script.VM >= VM_37)
             {
                 AddEvalLocal(CurrentFunction, _Array, false);
                 CurrentFunction.AddOp(ScriptOpCode.FirstArrayKey);
@@ -1188,7 +1188,7 @@ namespace TreyarchCompiler.Games
             EnterLoop(CurrentFunction);
             var __header = CurrentFunction.Locals.GetEndOfChain();
 
-            if (Script.VM == VM_38)
+            if (Script.VM >= VM_37)
             {
                 AddEvalLocalDefined(CurrentFunction, _Iterator);
             }
@@ -1198,7 +1198,7 @@ namespace TreyarchCompiler.Games
             }
             var __jmp = CurrentFunction.AddJump(ScriptOpCode.JumpOnFalse);
             //Assign the value
-            if (Script.VM == VM_38)
+            if (Script.VM >= VM_37)
             {
                 AddEvalLocal(CurrentFunction, _Iterator, false);
                 CurrentFunction.AddOp(ScriptOpCode.T9IteratorKey);
@@ -1229,7 +1229,7 @@ namespace TreyarchCompiler.Games
             //Assign iterator
             AddEvalLocal(CurrentFunction, _NextArrayKey, false);
 
-            if (Script.VM == VM_38)
+            if (Script.VM >= VM_37)
             {
                 AddAssignLocal(CurrentFunction, _Iterator);
             }

@@ -23,6 +23,7 @@ namespace T89CompilerLib.ScriptComponents
                 {
                     case VM_36:
                         return 0x60;
+                    case VM_37:
                     case VM_38:
                         return 0x58;
                 }
@@ -184,6 +185,39 @@ namespace T89CompilerLib.ScriptComponents
                 writer.Write((byte)0);
                 writer.Write(RequiresImplementsCount);
                 writer.Write((int)0);
+            } else if (Script.VM == VM_37)
+            {
+                writer.Write(ScriptMagic); //0x0
+                writer.Write(SourceChecksum);
+                writer.Write(UNK_0C);
+
+                writer.Write(ScriptName); //0x10
+                writer.Write(IncludeTableOffset);
+                writer.Write(StringCount);
+                writer.Write(ExportsCount);
+
+                writer.Write(0); // 0x20 //cseg_offset
+                writer.Write(StringTableOffset);
+                writer.Write(ImportsCount);
+                writer.Write((ushort)0); //unsupported // fixup_count
+                writer.Write(raw.Length);
+
+                writer.Write(ExportTableOffset); // 0x30
+                writer.Write(ImportTableOffset);
+                writer.Write(GlobalObjectCount);
+                writer.Write((ushort)0);
+                writer.Write(0); //unsupported // fixup_offset
+
+                writer.Write(GlobalObjectTable); // 0x40 
+                writer.Write(raw.Length);//size?
+                writer.Write((ushort)0);
+                writer.Write((ushort)0);
+                writer.Write(raw.Length); //cseg_size
+
+                writer.Write(IncludeCount); // 0x50
+                writer.Write((ushort)0); //unsupported
+                writer.Write(0); //unsupported
+
             } else if (Script.VM == VM_38)
             {
                 writer.Write(ScriptMagic); //0x0
@@ -243,6 +277,9 @@ namespace T89CompilerLib.ScriptComponents
             {
                 case VM_36:
                     header.SourceChecksum = BitConverter.ToUInt32(new byte[] { 0x38, 0x9D, 0x6E, 0x63 }, 0);
+                    break;
+                case VM_37:
+                    header.SourceChecksum = BitConverter.ToUInt32(new byte[] { 0x8d, 0xb0, 0xc1, 0xef }, 0);
                     break;
                 case VM_38:
                     header.SourceChecksum = BitConverter.ToUInt32(new byte[] { 0xa2, 0x16, 0x79, 0xC9 }, 0);

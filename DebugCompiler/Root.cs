@@ -578,6 +578,7 @@ namespace DebugCompiler
                     case "game":
                         if (!Enum.TryParse(split[1].ToLower().Trim().Replace("\\", "/"), true, out Games game))
                         {
+                            Console.WriteLine($"unknown game: {split[1]}");
                             Game = Games.T7;
                         } else
                         {
@@ -619,23 +620,6 @@ namespace DebugCompiler
             }
 
 
-            foreach (string opt in opts)
-            {
-                if (opt == "--build" || opt == "-b")
-                {
-                    cfg.BuildScript = true;
-                } else if (opt == "--compile" || opt == "-c")
-                {
-                    cfg.CompileOnly = true;
-                } else if (opt.Length > 2 && opt[1] == 'D')
-                { // -Dsomething
-                    cfg.ConditionalSymbols.Add(opt.Substring(2));
-                } else if (opt.Length > 2 && opt[1] == 'C')
-                { // -Coption=value
-                    cfg.ReadConfig(opt.Substring(2));
-                }
-            }
-
             if (args.Length > 1)
             {
                 try
@@ -650,6 +634,23 @@ namespace DebugCompiler
                 {
                     if (line.Trim().StartsWith("#")) continue;
                     cfg.ReadConfig(line);
+                }
+            }
+
+            foreach (string opt in opts)
+            {
+                if (opt == "--build" || opt == "-b")
+                {
+                    cfg.BuildScript = true;
+                } else if (opt == "--compile" || opt == "-c")
+                {
+                    cfg.CompileOnly = true;
+                } else if (opt.Length > 2 && opt[1] == 'D')
+                { // -Dsomething
+                    cfg.ConditionalSymbols.Add(opt.Substring(2));
+                } else if (opt.Length > 2 && opt[1] == 'C')
+                { // -Coption=value
+                    cfg.ReadConfig(opt.Substring(2));
                 }
             }
 
@@ -686,7 +687,7 @@ namespace DebugCompiler
                 cfg.ConditionalSymbols.Add("_SUPPORTS_LAZYLINK");
             }
             cfg.ConditionalSymbols.Add("_SUPPORTS_GCSC");
-            if (cfg.Game == Games.T8)
+            if (cfg.Game >= Games.T8)
             {
                 cfg.ConditionalSymbols.Add("_SUPPORTS_EVENTFUNC");
             }

@@ -15,6 +15,7 @@ namespace T89CompilerLib
     public enum VMREVISIONS
     { 
         VM_36 = 0x36,
+        VM_37 = 0x37,
         VM_38 = 0x38
     }
     public enum PLATFORM
@@ -453,6 +454,10 @@ namespace T89CompilerLib
                     if (Script.VM == VMREVISIONS.VM_36)
                     {
                         return 0x16;
+                    }
+                    if (Script.VM == VMREVISIONS.VM_38)
+                    {
+                        return 0x13;
                     }
                 }
 

@@ -16,6 +16,7 @@ namespace TreyarchCompiler
                     compiler =  new GSCCompiler(mode, code, path, platform, game, false);
                     break;
                 case Enums.Games.T8:
+                case Enums.Games.T937:
                 case Enums.Games.T9:
                     compiler = new T89Compiler(game, platform, code);
                     break;
